@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>はやとの大冒険 ～魔王討伐への道～</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #c8f0c8;
+    font-family: 'Courier New', 'MS Gothic', monospace;
+    font-size: 15px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 12px;
+  }
+  #game-wrap {
+    width: 100%;
+    max-width: 680px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  h1 {
+    text-align: center;
+    color: #ffe066;
+    font-size: 18px;
+    letter-spacing: 4px;
+    padding: 8px 0;
+    border-bottom: 1px solid #3a5a3a;
+  }
+  /* ステータスパネル */
+  #status-panel {
+    background: #0e1a0e;
+    border: 1px solid #2a4a2a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    min-height: 36px;
+    display: none;
+  }
+  .char-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 2px 0;
+    flex-wrap: wrap;
+  }
+  .char-name { color: #ffe066; min-width: 72px; font-weight: bold; }
+  .bar-wrap { display: flex; align-items: center; gap: 4px; font-size: 12px; }
+  .bar-label { color: #aaa; min-width: 22px; }
+  .bar-bg { background: #1a2a1a; border: 1px solid #3a5a3a; border-radius: 3px; width: 80px; height: 10px; }
+  .bar-fill { height: 100%; border-radius: 2px; transition: width 0.3s; }
+  .bar-hp  { background: #44cc44; }
+  .bar-mp  { background: #4488ff; }
+  .bar-low { background: #cc4444; }
+  .bar-num { color: #ccc; font-size: 11px; min-width: 60px; }
+  .dead-label { color: #ff4444; font-size: 12px; }
+  /* 敵表示 */
+  #enemy-panel {
+    background: #1a0e0e;
+    border: 1px solid #5a2a2a;
+    border-radius: 6px;
+    padding: 8px 10px;
+    font-size: 13px;
+    display: none;
+  }
+  .enemy-row {
+    display: flex; align-items: center; gap: 8px; margin: 2px 0; flex-wrap: wrap;
+  }
+  .enemy-name { color: #ff9966; min-width: 120px; font-weight: bold; }
+  /* テキストエリア */
+  #output {
+    background: #050a05;
+    border: 1px solid #2a4a2a;
+    border-radius: 6px;
+    padding: 12px 14px;
+    min-height: 260px;
+    max-height: 380px;
+    overflow-y: auto;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .line-normal { color: #c8f0c8; }
+  .line-story  { color: #aaddaa; }
+  .line-battle { color: #ffdd88; }
+  .line-good   { color: #66ffaa; font-weight: bold; }
+  .line-bad    { color: #ff6666; }
+  .line-info   { color: #88ccff; }
+  .line-boss   { color: #ffaa44; font-weight: bold; font-size: 16px; text-align:center; }
+  .line-sep    { color: #3a5a3a; }
+  /* ボタンエリア */
+  #btn-area {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    min-height: 50px;
+    padding: 4px 0;
+  }
+  .btn {
+    background: #0e1a0e;
+    color: #c8f0c8;
+    border: 1px solid #4a8a4a;
+    border-radius: 6px;
+    padding: 10px 18px;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    min-width: 100px;
+  }
+  .btn:hover { background: #1a3a1a; color: #ffffff; border-color: #88cc88; }
+  .btn:active { background: #2a4a2a; }
+  .btn-wide { min-width: 160px; }
+  .btn-danger { border-color: #aa4444; color: #ff9999; }
+  .btn-danger:hover { background: #2a1010; }
+  .btn-gold { border-color: #aa8800; color: #ffdd66; }
+  .btn-gold:hover { background: #1a1400; }
+  /* 所持金 */
+  #gold-disp {
+    text-align: right;
+    color: #ffdd66;
+    font-size: 13px;
+    padding-right: 4px;
+    display: none;
+  }
+</style>
+</head>
+<body>
+<div id="game-wrap">
+  <h1>はやとの大冒険</h1>
+  <div id="gold-disp"></div>
+  <div id="status-panel"></div>
+  <div id="enemy-panel"></div>
+  <div id="output"></div>
+  <div id="btn-area"></div>
+</div>
+
+<script>
+'use strict';
+
+// ════════════════════════════════════════
+//  UI ユーティリティ
+// ════════════════════════════════════════
+const output   = document.getElementById('output');
+const btnArea  = document.getElementById('btn-area');
+const statusPn = document.getElementById('status-panel');
+const enemyPn  = document.getElementById('enemy-panel');
+const goldDisp = document.getElementById('gold-disp');
+
+function addLine(text='', cls='line-normal') {
+  const d = document.createElement('div');
+  d.className = cls;
+  d.textContent = text;
+  output.appendChild(d);
+  output.scrollTop = output.scrollHeight;
+}
+function sep(char='─', n=44) { addLine(char.repeat(n), 'line-sep'); }
+function gap() { addLine(''); }
+
+function clearButtons() { btnArea.innerHTML = ''; }
+
+function showButtons(labels, cls='') {
+  clearButtons();
+  return new Promise(resolve => {
+    labels.forEach((lbl, i) => {
+      const b = document.createElement('button');
+      b.className = 'btn ' + cls;
+      b.textContent = lbl;
+      b.onclick = () => { clearButtons(); resolve(i); };
+      btnArea.appendChild(b);
+    });
+  });
+}
+
+function waitEnter(label='[ 続ける ]') {
+  clearButtons();
+  return new Promise(resolve => {
+    const b = document.createElement('button');
+    b.className = 'btn btn-wide';
+    b.textContent = label;
+    b.onclick = () => { clearButtons(); resolve(); };
+    btnArea.appendChild(b);
+  });
+}
+
+function makeBar(val, max, width=10) {
+  const filled = max > 0 ? Math.round(val / max * width) : 0;
+  return '#'.repeat(filled) + '.'.repeat(width - filled);
+}
+
+function updateGold(gs) {
+  goldDisp.style.display = 'block';
+  goldDisp.textContent = `所持金: ${gs.gold}G`;
+}
+
+function renderStatus(gs) {
+  statusPn.style.display = 'block';
+  statusPn.innerHTML = '';
+  gs.party.forEach(c => {
+    const row = document.createElement('div');
+    row.className = 'char-row';
+    const hpPct = c.max_hp > 0 ? c.hp / c.max_hp * 100 : 0;
+    const mpPct = c.max_mp > 0 ? c.mp / c.max_mp * 100 : 0;
+    const hpCls = hpPct > 30 ? 'bar-hp' : 'bar-low';
+    row.innerHTML = `
+      <span class="char-name">${c.name}</span>
+      <span class="bar-wrap">
+        <span class="bar-label">HP</span>
+        <span class="bar-bg"><span class="bar-fill ${hpCls}" style="width:${hpPct}%"></span></span>
+        <span class="bar-num">${c.hp}/${c.max_hp}</span>
+      </span>
+      <span class="bar-wrap">
+        <span class="bar-label">MP</span>
+        <span class="bar-bg"><span class="bar-fill bar-mp" style="width:${mpPct}%"></span></span>
+        <span class="bar-num">${c.mp}/${c.max_mp}</span>
+      </span>
+      ${!c.isAlive() ? '<span class="dead-label">[戦闘不能]</span>' : ''}
+    `;
+    statusPn.appendChild(row);
+  });
+}
+
+function renderEnemies(enemies) {
+  const alive = enemies.filter(e => e.isAlive());
+  if (alive.length === 0) { enemyPn.style.display = 'none'; return; }
+  enemyPn.style.display = 'block';
+  enemyPn.innerHTML = '';
+  alive.forEach(e => {
+    const row = document.createElement('div');
+    row.className = 'enemy-row';
+    const pct = e.max_hp > 0 ? e.hp / e.max_hp * 100 : 0;
+    const cls = pct > 30 ? 'bar-hp' : 'bar-low';
+    row.innerHTML = `
+      <span class="enemy-name">${e.name}</span>
+      <span class="bar-wrap">
+        <span class="bar-label">HP</span>
+        <span class="bar-bg"><span class="bar-fill ${cls}" style="width:${pct}%"></span></span>
+        <span class="bar-num">${e.hp}/${e.max_hp}</span>
+      </span>
+    `;
+    enemyPn.appendChild(row);
+  });
+}
+
+// ════════════════════════════════════════
+//  魔法・スキル定義
+// ════════════════════════════════════════
+const SPELLS = {
+  'メラ':       [4,  15, 25, 'enemy', 'fire',    '炎で攻撃'],
+  'メラミ':     [10, 40, 60, 'enemy', 'fire',    '中くらいの炎'],
+  'メラゾーマ': [20, 90,130, 'enemy', 'fire',    '巨大な炎'],
+  'ヒャド':     [4,  15, 25, 'enemy', 'ice',     '氷の塊'],
+  'ヒャダルコ': [10, 40, 60, 'enemy', 'ice',     '猛吹雪'],
+  'イオ':       [5,  20, 30, 'all',   'blast',   '爆発・全体'],
+  'イオナズン':  [25, 80,120, 'all',   'blast',   '大爆発・全体'],
+  'ベホイミ':   [8,  60, 80, 'ally',  'heal',    'HP回復'],
+  'ベホマ':     [20,999,999, 'ally',  'heal',    'HP全回復'],
+  'ベホマラー':  [30, 80,100, 'party', 'heal',    '全員回復'],
+  'ライデイン':  [15, 55, 75, 'enemy', 'thunder', '雷撃'],
+  'ギガデイン':  [35,130,170, 'enemy', 'thunder', '超雷撃'],
+  'バギマ':     [6,  25, 40, 'enemy', 'wind',    '真空波'],
+  'バギクロス':  [18, 70,100, 'all',   'wind',    '超真空波・全体'],
+  'スカラ':     [4,   0,  0, 'ally',  'buff',    '守備力アップ'],
+  'バイキルト':  [6,   0,  0, 'ally',  'buff',    '攻撃力2倍'],
+  'マホカンタ':  [5,   0,  0, 'ally',  'buff',    '魔法反射バリア'],
+};
+const SKILLS = {
+  '大剣振り':    [0,  30, 50, 'enemy', '剣を振り下ろす'],
+  '会心の一撃':  [0,  80,120, 'enemy', '確率でダメージ2倍'],
+  '稲妻斬り':    [5,  50, 70, 'enemy', '電撃の斬撃'],
+  'かばう':      [0,   0,  0, 'ally',  '仲間の攻撃を自分が受ける'],
+  '鉄壁の構え':  [0,   0,  0, 'self',  '1ターン守備力大幅アップ'],
+  '双竜打ち':    [8,  60, 90, 'all',   '全体攻撃'],
+  'さみだれ斬り':[10, 30, 50, 'all',   '全体に連続斬り'],
+};
+
+// ════════════════════════════════════════
+//  キャラクター
+// ════════════════════════════════════════
+class Character {
+  constructor(name, hp, mp, atk, dfs, spd, spells=[], skills=[]) {
+    this.name   = name;
+    this.max_hp = hp; this.hp = hp;
+    this.max_mp = mp; this.mp = mp;
+    this.atk    = atk; this.dfs = dfs; this.spd = spd;
+    this.level  = 1; this.exp = 0;
+    this.spells = [...spells];
+    this.skills = [...skills];
+    this.buffs  = {};
+  }
+  isAlive() { return this.hp > 0; }
+  takeDamage(dmg) {
+    dmg = Math.max(1, dmg - Math.floor(this.dfs / 2));
+    if (this.buffs.def_up) dmg = Math.floor(dmg / 2);
+    this.hp = Math.max(0, this.hp - dmg);
+    return dmg;
+  }
+  heal(amt) {
+    const before = this.hp;
+    this.hp = Math.min(this.max_hp, this.hp + amt);
+    return this.hp - before;
+  }
+}
+
+class Enemy extends Character {
+  constructor(name, hp, mp, atk, dfs, spd, exp, gold, spells=[], skills=[]) {
+    super(name, hp, mp, atk, dfs, spd, spells, skills);
+    this.exp = exp; this.gold = gold;
+  }
+  chooseAction() {
+    const pool = ['attack','attack','attack','attack'];
+    if (this.spells.length) pool.push('spell','spell');
+    if (this.skills.length) pool.push('skill','skill');
+    return pool[Math.floor(Math.random() * pool.length)];
+  }
+}
+
+// ════════════════════════════════════════
+//  パーティメンバー
+// ════════════════════════════════════════
+function makeHayato() {
+  return new Character('はやと', 120,30,28,18,15,
+    ['メラ','ライデイン'], ['大剣振り','稲妻斬り','会心の一撃']);
+}
+function makeMio() {
+  const c = new Character('みお',70,90,12,10,18,
+    ['メラ','メラミ','メラゾーマ','ベホイミ','ベホマ','ベホマラー'],[]);
+  c.level=2; return c;
+}
+function makeHaru() {
+  const c = new Character('はる',80,70,15,12,22,
+    ['バギマ','バギクロス','ヒャド','ヒャダルコ','イオ'],['さみだれ斬り']);
+  c.level=3; return c;
+}
+function makeTakanari() {
+  const c = new Character('たかなり',180,20,45,35,8,
+    ['スカラ'],['大剣振り','双竜打ち','さみだれ斬り','鉄壁の構え','かばう']);
+  c.level=4; return c;
+}
+function makeHayapapa() {
+  const c = new Character('はやぱぱ',100,60,20,20,12,
+    ['バイキルト','スカラ','マホカンタ','ベホイミ','イオナズン'],['かばう']);
+  c.level=5; return c;
+}
+
+// ════════════════════════════════════════
+//  敵テーブル
+// ════════════════════════════════════════
+const ENEMY_TABLES = {
+  forest: [
+    ()=>new Enemy('スライム',30,0,10,5,8,12,8),
+    ()=>new Enemy('おおがらす',25,0,14,4,14,15,10),
+    ()=>new Enemy('ゴブリン',45,5,18,8,10,20,14,['メラ']),
+    ()=>new Enemy('おおトカゲ',60,0,22,12,7,25,18),
+    ()=>new Enemy('まほうつかい',35,40,8,4,15,30,20,['メラ','ヒャド']),
+  ],
+  cave: [
+    ()=>new Enemy('ドラキー',55,10,24,10,15,35,22,['ヒャド']),
+    ()=>new Enemy('メタルスライム',4,0,10,99,50,500,0),
+    ()=>new Enemy('ガーゴイル',80,15,30,18,12,45,30),
+    ()=>new Enemy('ゾンビ',90,0,35,20,5,40,25),
+    ()=>new Enemy('ミノタウロス',120,0,45,25,9,60,40,[],['大剣振り']),
+  ],
+  castle: [
+    ()=>new Enemy('ナイト',100,10,40,30,12,55,50,[],['大剣振り']),
+    ()=>new Enemy('まじゅう',130,20,50,28,14,70,60,['メラミ']),
+    ()=>new Enemy('ダークエルフ',90,60,30,20,20,75,65,['ヒャダルコ','バギマ']),
+    ()=>new Enemy('竜騎士',150,15,55,35,10,90,80,[],['稲妻斬り']),
+  ],
+  maou_tower: [
+    ()=>new Enemy('デスナイト',200,30,65,40,15,120,100,[],['大剣振り','稲妻斬り']),
+    ()=>new Enemy('ドラゴンゾンビ',250,20,70,35,12,140,110,['メラミ','ヒャダルコ']),
+    ()=>new Enemy('魔神将',280,60,75,45,18,160,130,['イオナズン','バギクロス'],['さみだれ斬り']),
+  ],
+};
+const makeBossForest  = ()=>new Enemy('キングスライム',200,20,30,15,10,150,100,['ヒャド']);
+const makeBossCave    = ()=>new Enemy('ドラゴン',350,40,55,30,15,300,200,['メラミ','ヒャダルコ'],['大剣振り']);
+const makeBossCastle  = ()=>new Enemy('魔将軍バルゴス',500,80,75,40,18,500,350,['メラゾーマ','イオナズン','ヒャダルコ'],['さみだれ斬り','双竜打ち']);
+const makeMaou        = ()=>new Enemy('大魔王ゾルダム',800,200,100,55,25,9999,9999,['メラゾーマ','ギガデイン','バギクロス','イオナズン','ベホマ'],['さみだれ斬り','双竜打ち','大剣振り']);
+
+// ════════════════════════════════════════
+//  ゲーム状態
+// ════════════════════════════════════════
+class GameState {
+  constructor() {
+    this.party = [makeHayato()];
+    this.gold  = 50;
+    this.items = {'やくそう':3,'どくけしそう':1};
+  }
+  living() { return this.party.filter(c => c.isAlive()); }
+}
+
+function rand(min, max) { return min + Math.floor(Math.random() * (max - min + 1)); }
+
+function checkLevelUp(c) {
+  const needed = c.level * 80;
+  if (c.exp >= needed && c.level < 30) {
+    c.level++;
+    c.exp -= needed;
+    c.max_hp += rand(8,15); c.max_mp += rand(3,8);
+    c.atk    += rand(2,5);  c.dfs    += rand(1,4);
+    c.hp = c.max_hp; c.mp = c.max_mp;
+    return true;
+  }
+  return false;
+}
+
+function giveExp(gs, enemies) {
+  const totalExp  = enemies.reduce((s,e) => s+e.exp, 0);
+  const totalGold = enemies.reduce((s,e) => s+e.gold, 0);
+  gs.gold += totalGold;
+  addLine(`\n  勝利！ ${totalExp} EXP と ${totalGold} G を手に入れた！`, 'line-good');
+  gs.party.forEach(c => {
+    c.exp += totalExp;
+    if (checkLevelUp(c)) {
+      addLine(`  ✦ ${c.name} はレベルが上がった！ (Lv${c.level})`, 'line-good');
+    }
+  });
+  updateGold(gs);
+}
+
+// ════════════════════════════════════════
+//  ターゲット選択
+// ════════════════════════════════════════
+async function pickEnemy(enemies) {
+  const alive = enemies.filter(e => e.isAlive());
+  if (alive.length === 1) return alive[0];
+  addLine('  どの敵を狙う？', 'line-info');
+  const i = await showButtons(alive.map(e => e.name));
+  return alive[i];
+}
+
+async function pickAlly(party, deadOk=false) {
+  const targets = deadOk ? party : party.filter(c => c.isAlive());
+  if (!targets.length) return null;
+  if (targets.length === 1) return targets[0];
+  addLine('  誰に使う？', 'line-info');
+  const i = await showButtons(targets.map(c => c.name));
+  return targets[i];
+}
+
+// ════════════════════════════════════════
+//  魔法
+// ════════════════════════════════════════
+async function castSpell(gs, caster, spellName, enemies) {
+  const [cost,pmin,pmax,ttype,elem] = SPELLS[spellName];
+  if (caster.mp < cost) {
+    addLine(`  MPが足りない！（必要:${cost}  現在:${caster.mp}）`,'line-bad'); return;
+  }
+  caster.mp -= cost;
+  addLine(`  ${caster.name} は 【${spellName}】 を唱えた！`,'line-battle');
+
+  if (elem === 'heal') {
+    if (ttype === 'ally') {
+      const t = await pickAlly(gs.party, true);
+      if (!t) return;
+      const amt = pmin >= 999 ? t.max_hp - t.hp : rand(pmin,pmax);
+      addLine(`  ${t.name} のHPが ${t.heal(amt)} 回復！（${t.hp}/${t.max_hp}）`,'line-good');
+    } else {
+      const amt = rand(pmin,pmax);
+      gs.party.forEach(c => { if(c.isAlive()) addLine(`  ${c.name} のHPが ${c.heal(amt)} 回復！`,'line-good'); });
+    }
+  } else if (elem === 'buff') {
+    const t = await pickAlly(gs.party);
+    if (!t) return;
+    if (spellName==='バイキルト')  { t.buffs.atk_up=3; addLine(`  ${t.name} の攻撃力が2倍になった！`,'line-good'); }
+    if (spellName==='スカラ')     { t.buffs.def_up=3; addLine(`  ${t.name} の守備力が上がった！`,'line-good'); }
+    if (spellName==='マホカンタ')  { t.buffs.reflect=2; addLine(`  ${t.name} に魔法反射バリアが張られた！`,'line-good'); }
+  } else if (ttype === 'all') {
+    enemies.filter(e=>e.isAlive()).forEach(e => {
+      const actual = e.takeDamage(rand(pmin,pmax));
+      addLine(`  ${e.name} に ${actual} のダメージ！`,'line-battle');
+      if (!e.isAlive()) addLine(`  ${e.name} を倒した！`,'line-good');
+    });
+  } else {
+    const t = await pickEnemy(enemies);
+    if (t.buffs.reflect) { addLine(`  ${t.name} が魔法を反射した！`,'line-bad'); return; }
+    const actual = t.takeDamage(rand(pmin,pmax));
+    addLine(`  ${t.name} に ${actual} のダメージ！`,'line-battle');
+    if (!t.isAlive()) addLine(`  ${t.name} を倒した！`,'line-good');
+  }
+}
+
+// ════════════════════════════════════════
+//  スキル
+// ════════════════════════════════════════
+async function useSkill(gs, ch, skillName, enemies) {
+  const [cost,pmin,pmax,ttype] = SKILLS[skillName];
+  if (ch.mp < cost) { addLine(`  MPが足りない！`,'line-bad'); return; }
+  ch.mp -= cost;
+  addLine(`  ${ch.name} の 【${skillName}】！`,'line-battle');
+
+  if (skillName === 'かばう') {
+    const t = await pickAlly(gs.party);
+    if (t) { t.buffs.guarded_by = ch.name; addLine(`  ${ch.name} は ${t.name} をかばう！`,'line-good'); }
+  } else if (skillName === '鉄壁の構え') {
+    ch.buffs.def_up = 2; addLine(`  ${ch.name} は鉄壁の守りを固めた！`,'line-good');
+  } else if (skillName === '会心の一撃') {
+    const t = await pickEnemy(enemies);
+    let dmg = rand(pmin,pmax);
+    if (Math.random() < 0.5) { dmg = Math.floor(dmg*2.5); addLine(`  会心の一撃！！`,'line-good'); }
+    const actual = t.takeDamage(dmg);
+    addLine(`  ${t.name} に ${actual} のダメージ！`,'line-battle');
+    if (!t.isAlive()) addLine(`  ${t.name} を倒した！`,'line-good');
+  } else if (ttype === 'all') {
+    enemies.filter(e=>e.isAlive()).forEach(e => {
+      const actual = e.takeDamage(rand(pmin,pmax));
+      addLine(`  ${e.name} に ${actual} のダメージ！`,'line-battle');
+      if (!e.isAlive()) addLine(`  ${e.name} を倒した！`,'line-good');
+    });
+  } else {
+    const t = await pickEnemy(enemies);
+    const actual = t.takeDamage(rand(pmin,pmax));
+    addLine(`  ${t.name} に ${actual} のダメージ！`,'line-battle');
+    if (!t.isAlive()) addLine(`  ${t.name} を倒した！`,'line-good');
+  }
+}
+
+// ════════════════════════════════════════
+//  アイテム
+// ════════════════════════════════════════
+async function useItem(gs, ch) {
+  const usable = Object.entries(gs.items).filter(([,v])=>v>0);
+  if (!usable.length) { addLine(`  アイテムを持っていない！`,'line-bad'); return; }
+  const opts = usable.map(([k,v])=>`${k} ×${v}`);
+  opts.push('キャンセル');
+  addLine('  どのアイテムを使う？','line-info');
+  const idx = await showButtons(opts);
+  if (idx === usable.length) return;
+  const [itemName] = usable[idx];
+  const t = await pickAlly(gs.party);
+  if (!t) return;
+  gs.items[itemName]--;
+  if (itemName === 'やくそう')    addLine(`  ${t.name} のHPが ${t.heal(80)} 回復した！`,'line-good');
+  else if (itemName === 'かいふくやく') addLine(`  ${t.name} のHPが ${t.heal(200)} 回復した！`,'line-good');
+  else addLine(`  ${itemName} を使った！`,'line-good');
+}
+
+// ════════════════════════════════════════
+//  プレイヤーターン
+// ════════════════════════════════════════
+async function playerTurn(gs, ch, enemies) {
+  addLine(`\n  >> ${ch.name} の行動`,'line-info');
+  const idx = await showButtons(['こうげき','まほう','とくぎ','アイテム','ぼうぎょ']);
+
+  if (idx === 0) {
+    const t = await pickEnemy(enemies);
+    let base = ch.atk + rand(-5,5);
+    if (ch.buffs.atk_up) base *= 2;
+    const actual = t.takeDamage(Math.max(1,base));
+    addLine(`  ${ch.name} は ${t.name} に ${actual} のダメージ！`,'line-battle');
+    if (!t.isAlive()) addLine(`  ${t.name} を倒した！`,'line-good');
+
+  } else if (idx === 1) {
+    if (!ch.spells.length) { addLine('  使える魔法がない！','line-bad'); return; }
+    const opts = ch.spells.map(s=>`${s}  (MP:${SPELLS[s][0]})`);
+    opts.push('キャンセル');
+    addLine('  魔法を選んで','line-info');
+    const si = await showButtons(opts);
+    if (si < ch.spells.length) await castSpell(gs, ch, ch.spells[si], enemies);
+
+  } else if (idx === 2) {
+    if (!ch.skills.length) { addLine('  使えるとくぎがない！','line-bad'); return; }
+    const opts = [...ch.skills, 'キャンセル'];
+    addLine('  とくぎを選んで','line-info');
+    const si = await showButtons(opts);
+    if (si < ch.skills.length) await useSkill(gs, ch, ch.skills[si], enemies);
+
+  } else if (idx === 3) {
+    await useItem(gs, ch);
+
+  } else {
+    ch.buffs.def_up = 2;
+    addLine(`  ${ch.name} は守りの構えをとった！（次ターンダメージ半減）`,'line-good');
+  }
+}
+
+// ════════════════════════════════════════
+//  敵ターン
+// ════════════════════════════════════════
+function enemyTurn(e, gs, living) {
+  const action = e.chooseAction();
+  const t = living[Math.floor(Math.random() * living.length)];
+
+  if (action === 'spell' && e.spells.length) {
+    const sn = e.spells[Math.floor(Math.random()*e.spells.length)];
+    const [cost,pmin,pmax,ttype,elem] = SPELLS[sn];
+    if (e.mp < cost) { doEnemyAttack(e,t,gs,living); return; }
+    e.mp -= cost;
+    addLine(`  ${e.name} は 【${sn}】 を唱えた！`,'line-battle');
+    if (elem === 'heal') {
+      addLine(`  ${e.name} のHPが ${e.heal(rand(pmin,pmax))} 回復！`,'line-bad');
+    } else if (ttype === 'all') {
+      living.forEach(c => {
+        const a = c.takeDamage(rand(pmin,pmax));
+        addLine(`  ${c.name} に ${a} のダメージ！`,'line-battle');
+        if (!c.isAlive()) addLine(`  ${c.name} は倒れた...`,'line-bad');
+      });
+    } else {
+      if (t.buffs.reflect) {
+        const a = e.takeDamage(rand(pmin,pmax));
+        addLine(`  ${t.name} が魔法を反射！ ${e.name} に ${a} ダメージ！`,'line-good');
+        return;
+      }
+      const a = t.takeDamage(rand(pmin,pmax));
+      addLine(`  ${t.name} に ${a} のダメージ！`,'line-battle');
+      if (!t.isAlive()) addLine(`  ${t.name} は倒れた...`,'line-bad');
+    }
+  } else if (action === 'skill' && e.skills.length) {
+    const sk = e.skills[Math.floor(Math.random()*e.skills.length)];
+    const [,pmin,pmax,ttype] = SKILLS[sk];
+    addLine(`  ${e.name} の 【${sk}】！`,'line-battle');
+    if (ttype === 'all') {
+      living.forEach(c => {
+        const a = c.takeDamage(rand(pmin,pmax));
+        addLine(`  ${c.name} に ${a} のダメージ！`,'line-battle');
+        if (!c.isAlive()) addLine(`  ${c.name} は倒れた...`,'line-bad');
+      });
+    } else {
+      const a = t.takeDamage(rand(pmin,pmax));
+      addLine(`  ${t.name} に ${a} のダメージ！`,'line-battle');
+      if (!t.isAlive()) addLine(`  ${t.name} は倒れた...`,'line-bad');
+    }
+  } else {
+    doEnemyAttack(e, t, gs, living);
+  }
+}
+
+function doEnemyAttack(e, t, gs, living) {
+  const dmg = e.atk + rand(-5,5);
+  if (t.buffs.guarded_by) {
+    const gname = t.buffs.guarded_by;
+    delete t.buffs.guarded_by;
+    const guardian = gs.party.find(c => c.name===gname && c.isAlive());
+    if (guardian) {
+      const a = guardian.takeDamage(dmg);
+      addLine(`  ${guardian.name} が ${t.name} をかばった！ ${a} のダメージ！`,'line-battle');
+      if (!guardian.isAlive()) addLine(`  ${guardian.name} は倒れた...`,'line-bad');
+      return;
+    }
+  }
+  const actual = t.takeDamage(dmg);
+  addLine(`  ${e.name} は ${t.name} を攻撃！ ${actual} のダメージ！`,'line-battle');
+  if (!t.isAlive()) addLine(`  ${t.name} は倒れた...`,'line-bad');
+}
+
+// ════════════════════════════════════════
+//  戦闘メイン
+// ════════════════════════════════════════
+async function battle(gs, enemies, label='') {
+  sep('-');
+  if (label) addLine(`  [ ${label} ]`,'line-boss');
+  addLine(`  ⚔ 戦闘開始！`,'line-battle');
+  enemies.forEach(e => addLine(`  ${e.name} があらわれた！`,'line-battle'));
+  await waitEnter();
+
+  while (true) {
+    const aliveEnemies = enemies.filter(e => e.isAlive());
+    const living = gs.living();
+    if (!aliveEnemies.length || !living.length) break;
+
+    sep('-');
+    addLine('  ★ 味方のターン','line-info');
+    renderStatus(gs);
+    renderEnemies(aliveEnemies);
+    gap();
+
+    for (const ch of gs.party) {
+      if (!ch.isAlive()) continue;
+      const ae = enemies.filter(e=>e.isAlive());
+      if (!ae.length) break;
+      await playerTurn(gs, ch, ae);
+      Object.keys(ch.buffs).forEach(k => {
+        if (typeof ch.buffs[k] === 'number') {
+          ch.buffs[k]--;
+          if (ch.buffs[k] <= 0) delete ch.buffs[k];
+        }
+      });
+      renderStatus(gs);
+      renderEnemies(enemies);
+    }
+
+    const living2 = gs.living();
+    const ae2 = enemies.filter(e=>e.isAlive());
+    if (living2.length && ae2.length) {
+      sep('-');
+      addLine('  ☠ 敵のターン','line-bad');
+      ae2.forEach(e => enemyTurn(e, gs, living2));
+      renderStatus(gs);
+    }
+
+    await waitEnter();
+  }
+
+  if (!gs.living().length) {
+    sep('=');
+    addLine('\n  ゲームオーバー... パーティ全員が倒れてしまった。','line-bad');
+    addLine('  だが、はやとたちの冒険は終わらない...','line-story');
+    gs.party.forEach(c => { c.hp = 1; });
+    await waitEnter('復活して続ける');
+    renderStatus(gs);
+    return false;
+  }
+
+  giveExp(gs, enemies);
+  renderStatus(gs);
+  return true;
+}
+
+// ════════════════════════════════════════
+//  ショップ
+// ════════════════════════════════════════
+const SHOP_ITEMS = [['やくそう',50],['どくけしそう',30],['かいふくやく',200]];
+
+async function shop(gs, location='') {
+  sep('=');
+  addLine(`  [[ お店 ${location} ]]`,'line-info');
+  updateGold(gs);
+  while (true) {
+    addLine(`\n  所持金: ${gs.gold}G`,'line-info');
+    const opts = SHOP_ITEMS.map(([n,p])=>`${n}  ${p}G`);
+    opts.push('お店を出る');
+    const idx = await showButtons(opts, 'btn-gold');
+    if (idx === SHOP_ITEMS.length) break;
+    const [name, price] = SHOP_ITEMS[idx];
+    if (gs.gold < price) { addLine('  お金が足りない！','line-bad'); }
+    else {
+      gs.gold -= price;
+      gs.items[name] = (gs.items[name]||0) + 1;
+      addLine(`  ${name} を買った！（残り${gs.gold}G）`,'line-good');
+      updateGold(gs);
+    }
+  }
+}
+
+// ════════════════════════════════════════
+//  ストーリーチャプター
+// ════════════════════════════════════════
+async function chapter0(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第0章：旅立ちの朝\n','line-boss');
+  sep('-');
+  addLine('  ここはアルフィア王国の小さな村、ハルモニア村。','line-story');
+  addLine('  少年 はやと は、幼い頃から剣の修行を続けてきた。','line-story');
+  gap();
+  addLine('  ある朝、村に王国の伝令が来た。','line-story');
+  gap();
+  addLine('  伝令「大変です！大魔王ゾルダムが復活しました！','line-story');
+  addLine('       このままでは世界が闇に包まれてしまいます！」','line-story');
+  gap();
+  addLine('  はやと「...そうか。俺が倒しに行く。」','line-story');
+  gap();
+  addLine('  はやとは剣を手に取り、世界を救う旅へと出発した。','line-story');
+  await waitEnter();
+
+  addLine('\n  村の外に出ると、早速モンスターが！','line-story');
+  await battle(gs, [new Enemy('スライム',30,0,8,3,5,20,15)]);
+  addLine('\n  戦闘に慣れてきたはやとは、旅を続ける。','line-story');
+  await waitEnter();
+}
+
+async function chapter1(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第1章：まがりの森\n','line-boss');
+  sep('-');
+  addLine('  はやとは「まがりの森」へ踏み込んだ。','line-story');
+  addLine('  薄暗い森の中で、モンスターたちが行く手を阻む。','line-story');
+  await waitEnter();
+
+  for (let i=0; i<2; i++) {
+    const table = ENEMY_TABLES.forest;
+    const cnt = rand(1,2);
+    const enemies = Array.from({length:cnt},()=>table[Math.floor(Math.random()*table.length)]());
+    await battle(gs, enemies);
+    if (!gs.living().length) return;
+  }
+
+  output.innerHTML = '';
+  sep('-');
+  addLine('\n  森の奥で、少女が魔物に囲まれていた！','line-story');
+  gap();
+  addLine('  みお「たすけて！！」','line-story');
+  addLine('  はやと「待ってろ！今助ける！」','line-story');
+  await waitEnter();
+
+  await battle(gs,[
+    new Enemy('ゴブリン',45,5,18,8,10,20,14,['メラ']),
+    new Enemy('ゴブリン',45,5,18,8,10,20,14,['メラ']),
+  ]);
+  if (!gs.living().length) return;
+
+  output.innerHTML = '';
+  addLine('  みお「ありがとう！あなた、強いんだね。」','line-story');
+  addLine('  はやと「まあね。君、大丈夫？」','line-story');
+  addLine('  みお「うん。私、魔法使いなんだ。一緒に連れてってくれない？','line-story');
+  addLine('        私も大魔王を倒したい理由があるの。」','line-story');
+  addLine('  はやと「...わかった。一緒に行こう！」','line-story');
+  gap();
+  addLine('  ✦ みお が仲間になった！','line-good');
+  addLine('    攻撃魔法も回復魔法も使える万能キャラ！','line-good');
+  gs.party.push(makeMio());
+  renderStatus(gs);
+  await waitEnter();
+
+  addLine('\n  森の奥に進むと、巨大なモンスターが待ち受けていた！','line-story');
+  addLine('  キングスライム「GURURU...！　邪魔者は消してやる！」','line-battle');
+  await battle(gs,[makeBossForest()],'BOSS BATTLE！');
+  if (!gs.living().length) return;
+
+  output.innerHTML = '';
+  addLine('  はやと「ふう...倒した。先を急ごう。」','line-story');
+  addLine('  みお「次はどこへ行くの？」','line-story');
+  addLine('  はやと「魔王の城は北にあると聞いた。まず洞窟を抜けよう。」','line-story');
+  gap();
+  addLine('  【ヒント】出口近くの村で買い物ができます。','line-info');
+  await waitEnter();
+  await shop(gs,'まがり村');
+  await waitEnter();
+}
+
+async function chapter2(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第2章：冥府の洞窟\n','line-boss');
+  sep('-');
+  addLine('  暗くじめじめした洞窟。','line-story');
+  addLine('  はるかかなたから何かの足音が響いてくる...','line-story');
+  await waitEnter();
+
+  for (let i=0; i<2; i++) {
+    const table = ENEMY_TABLES.cave;
+    const cnt = rand(1,2);
+    const enemies = Array.from({length:cnt},()=>table[Math.floor(Math.random()*table.length)]());
+    await battle(gs, enemies);
+    if (!gs.living().length) return;
+  }
+
+  output.innerHTML = '';
+  sep('-');
+  addLine('\n  洞窟の中で、軽やかな足音とともに青年が現れた。','line-story');
+  gap();
+  addLine('  はる「あ！人間に会うとは珍しい！ここ、かなりやばいよ？」','line-story');
+  addLine('  はやと「知ってる。大魔王討伐に向かってる。」','line-story');
+  addLine('  はる「マジで！？俺も行きたかったんだよね〜。一緒に行っていい？」','line-story');
+  addLine('  みお「増えた...（いい子そうだけど）」','line-story');
+  addLine('  はやと「腕は立つか？」','line-story');
+  addLine('  はる「風と氷の魔法、任せてよ！」','line-story');
+  gap();
+  addLine('  ✦ はる が仲間になった！','line-good');
+  addLine('    素早さが高く、全体魔法が得意な風使い！','line-good');
+  gs.party.push(makeHaru());
+  renderStatus(gs);
+  await waitEnter();
+
+  for (let i=0; i<2; i++) {
+    const table = ENEMY_TABLES.cave;
+    const cnt = rand(1,2);
+    const enemies = Array.from({length:cnt},()=>table[Math.floor(Math.random()*table.length)]());
+    await battle(gs, enemies);
+    if (!gs.living().length) return;
+  }
+
+  output.innerHTML = '';
+  addLine('\n  洞窟の最奥に炎を吐く巨大なドラゴンが！','line-story');
+  addLine('  ドラゴン「グオオオオ！！この先は通さん！！」','line-battle');
+  await battle(gs,[makeBossCave()],'DRAGON BATTLE！');
+  if (!gs.living().length) return;
+
+  output.innerHTML = '';
+  addLine('  はる「やった！ドラゴンを倒したぞ！」','line-story');
+  addLine('  みお「まだまだ先は長いよ...」','line-story');
+  addLine('  はやと「行こう。魔王城はもうすぐだ。」','line-story');
+  await waitEnter();
+  await shop(gs,'洞窟出口の集落');
+  await waitEnter();
+}
+
+async function chapter3(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第3章：暗黒城の攻防\n','line-boss');
+  sep('-');
+  addLine('  魔王城の前に、巨大な暗黒の城塞がそびえ立っていた。','line-story');
+  addLine('  魔将軍バルゴスが守護するこの城を突破しなければならない。','line-story');
+  await waitEnter();
+
+  for (let i=0; i<2; i++) {
+    const table = ENEMY_TABLES.castle;
+    const cnt = rand(1,2);
+    const enemies = Array.from({length:cnt},()=>table[Math.floor(Math.random()*table.length)]());
+    await battle(gs, enemies);
+    if (!gs.living().length) return;
+  }
+
+  output.innerHTML = '';
+  sep('-');
+  addLine('\n  城内で、鎧に身を包んだ巨漢が壁にもたれかかっていた。','line-story');
+  gap();
+  addLine('  たかなり「...よう。お前ら、魔王を倒しに来たのか？」','line-story');
+  addLine('  はやと「そうだ。あんたは？」','line-story');
+  addLine('  たかなり「俺はたかなり。元王国騎士団副長だ。','line-story');
+  addLine('            魔将軍に城を乗っ取られてからずっと一人で戦ってた。」','line-story');
+  addLine('  はる「一人で！？」','line-story');
+  addLine('  たかなり「ああ。でも限界が来てた。お前らと組んでいいか？」','line-story');
+  addLine('  はやと「むしろ頼む！来てくれ！」','line-story');
+  gap();
+  addLine('  ✦ たかなり が仲間になった！','line-good');
+  addLine('    最強クラスの攻撃力と防御力を誇る大戦士！','line-good');
+  gs.party.push(makeTakanari());
+  renderStatus(gs);
+  await waitEnter();
+
+  const te = ENEMY_TABLES.castle;
+  await battle(gs, [te[Math.floor(Math.random()*te.length)]()]);
+  if (!gs.living().length) return;
+
+  output.innerHTML = '';
+  addLine('\n  玉座の間に魔将軍バルゴスが待ち受けていた！','line-story');
+  addLine('  バルゴス「よくぞここまで来た、小僧ども！','line-battle');
+  addLine('            ここがお前たちの墓場になる！！」','line-battle');
+  await battle(gs,[makeBossCastle()],'魔将軍バルゴス 戦！');
+  if (!gs.living().length) return;
+
+  output.innerHTML = '';
+  addLine('  バルゴス「バカな...こんな若者たちに...私が...」','line-story');
+  addLine('  はやと「お前に守られていた魔王も次は終わりだ！」','line-story');
+  gap();
+  addLine('  城内を探索していると、地下牢に誰かが閉じ込められていた！','line-story');
+  await waitEnter();
+}
+
+async function chapter4(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第4章：父との再会\n','line-boss');
+  sep('-');
+  addLine('  地下牢の奥に見覚えのある人物が...','line-story');
+  gap();
+  addLine('  はやと「...え？　お父さん！？」','line-story');
+  gap();
+  addLine('  はやぱぱ「はやと...！良かった、生きてたか...！','line-story');
+  addLine('            私は魔王に捕まってしまっていた...。」','line-story');
+  addLine('  はやと「大丈夫？怪我は！？」','line-story');
+  addLine('  はやぱぱ「問題ない。むしろ...お前が強くなったな。」','line-story');
+  addLine('  みお「お父さん...？はやとのお父さん、すごい雰囲気だね（小声）」','line-story');
+  addLine('  たかなり「あの目は...ただ者じゃないな」','line-story');
+  addLine('  はやぱぱ「私もお前たちについていく。魔王は私も因縁がある相手だ。」','line-story');
+  gap();
+  addLine('  ✦ はやぱぱ が仲間になった！','line-good');
+  addLine('    バフ・サポート魔法の達人。謎の強さを秘めたはやとの父！','line-good');
+  gs.party.push(makeHayapapa());
+  renderStatus(gs);
+  await waitEnter();
+
+  addLine('\n  全員が揃った。魔王の塔へ向かうぞ！','line-good');
+  renderStatus(gs);
+  await waitEnter();
+}
+
+async function chapter5(gs) {
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  第5章：大魔王の塔\n','line-boss');
+  sep('-');
+  addLine('  暗黒の霧に包まれた魔王の塔。','line-story');
+  addLine('  ここを登り切った先に、大魔王ゾルダムが待っている。','line-story');
+  gap();
+  addLine('  はやぱぱ「全員、気を引き締めろ。ここからが本番だ。」','line-story');
+  addLine('  たかなり「俺は誰も死なせない。かかってこい！」','line-story');
+  addLine('  はる「みんなでやれば絶対勝てる！」','line-story');
+  addLine('  みお「はやと、信じてるよ。一緒に戦おう。」','line-story');
+  addLine('  はやと「ああ...みんな、ありがとう。行くぞ！！」','line-story');
+  await waitEnter();
+
+  for (let i=0; i<3; i++) {
+    output.innerHTML = '';
+    addLine(`\n  塔の${i+1}階層...`,'line-story');
+    const table = ENEMY_TABLES.maou_tower;
+    const cnt = rand(1,2);
+    const enemies = Array.from({length:cnt},()=>table[Math.floor(Math.random()*table.length)]());
+    await battle(gs, enemies);
+    if (!gs.living().length) return;
+    addLine('\n  休憩スポットを発見！HPとMPが少し回復した。','line-good');
+    gs.party.forEach(c => {
+      if (c.isAlive()) {
+        c.heal(Math.floor(c.max_hp/3));
+        c.mp = Math.min(c.max_mp, c.mp + Math.floor(c.max_mp/3));
+      }
+    });
+    renderStatus(gs);
+    await waitEnter();
+  }
+
+  output.innerHTML = '';
+  sep('=');
+  addLine('\n  塔の最上階。','line-story');
+  addLine('  真っ黒な空の下、玉座に座る巨大な影が振り向いた。','line-story');
+  gap();
+  addLine('  ゾルダム「フフフ...よく来た、勇者よ。','line-battle');
+  addLine('            このゾルダムが直々に相手をしてやろう...！」','line-battle');
+  gap();
+  addLine('  はやと「大魔王ゾルダム...！お前が世界を闇に沈めようとしているのか！」','line-story');
+  gap();
+  addLine('  ゾルダム「そうだ。人間どもは愚かだ。戦い、奪い、滅ぼす。','line-battle');
+  addLine('            ならば私が全てを終わらせてやる...！！」','line-battle');
+  gap();
+  addLine('  はやぱぱ「...ゾルダム。お前は変わってしまったな。','line-story');
+  addLine('            昔、同じ夢を持ったこともあったはずだ。」','line-story');
+  gap();
+  addLine('  ゾルダム「黙れ！過去は関係ない！！さあ、この地獄を見ろ！！」','line-battle');
+  await waitEnter();
+
+  await battle(gs,[makeMaou()],'★★★ 大魔王ゾルダム 最終決戦 ★★★');
+}
+
+async function chapter6(gs) {
+  if (!gs.living().length) return;
+  output.innerHTML = '';
+  sep('=');
+  gap();
+  addLine('  ゾルダム「ガ...ガアアア...！　なぜだ...なぜ負けるのだ...！」','line-battle');
+  gap();
+  addLine('  はやと「お前がどれだけ強くても、俺には仲間がいる。','line-story');
+  addLine('          それがお前との差だ！！」','line-story');
+  gap();
+  addLine('  ゾルダム「仲間...か。私には...もう...」','line-battle');
+  gap();
+  addLine('  巨大な黒い闇が崩れ落ち、世界を覆っていた暗黒が晴れていく。','line-story');
+  addLine('  空には久しぶりに太陽が輝いた。','line-story');
+  await waitEnter();
+
+  output.innerHTML = '';
+  sep('=');
+  gap();
+  addLine('  みお「はやと...やったよ。やったね！！」','line-story');
+  addLine('  はる「俺たち、本当に魔王を倒しちゃったよ！すごすぎる！」','line-story');
+  addLine('  たかなり「...はやと。お前は本物の勇者だ。」','line-story');
+  addLine('  はやぱぱ「はやと...お前は俺の誇りだ。」','line-story');
+  gap();
+  addLine('  はやと「みんな...本当にありがとう。','line-story');
+  addLine('          お前たちがいなかったら俺は絶対に負けてた。','line-story');
+  addLine('          みお、はる、たかなり、はやぱぱ...最高の仲間だ。」','line-story');
+  await waitEnter();
+
+  output.innerHTML = '';
+  sep('=');
+  gap();
+  addLine('         ★★★  E  N  D  I  N  G  ★★★','line-boss');
+  gap();
+  sep('-');
+  gap();
+  addLine('  世界に平和が戻り、人々は再び笑顔を取り戻した。','line-story');
+  gap();
+  addLine('  はやとたちの冒険は語り継がれ、','line-story');
+  addLine('  伝説となってその名を残した。','line-story');
+  gap();
+  sep('-');
+  gap();
+  renderStatus(gs);
+  gap();
+  addLine('  ★ クリアおめでとう！ はやとの大冒険、完！ ★','line-good');
+  gap();
+  sep('=');
+  await waitEnter('もう一度プレイ');
+  location.reload();
+}
+
+// ════════════════════════════════════════
+//  タイトル → メイン
+// ════════════════════════════════════════
+async function titleScreen() {
+  output.innerHTML = '';
+  statusPn.style.display = 'none';
+  enemyPn.style.display  = 'none';
+  goldDisp.style.display = 'none';
+  sep('=');
+  gap();
+  addLine('        ★☆ は や と の 大 冒 険 ☆★','line-boss');
+  addLine('          ～ 魔 王 討 伐 へ の 道 ～','line-story');
+  gap();
+  sep('-');
+  gap();
+  addLine('  仲間：みお  はる  たかなり  はやぱぱ','line-info');
+  addLine('  全5章 + ボス戦 フルストーリーRPG','line-info');
+  gap();
+  sep('=');
+  await waitEnter('ゲームスタート！');
+}
+
+async function main() {
+  await titleScreen();
+  const gs = new GameState();
+  updateGold(gs);
+
+  await chapter0(gs);
+  await chapter1(gs);
+  if (!gs.living().length) { addLine('  ...しかし物語は終わらない。','line-story'); return; }
+  await chapter2(gs);
+  if (!gs.living().length) { addLine('  ...しかし物語は終わらない。','line-story'); return; }
+  await chapter3(gs);
+  await chapter4(gs);
+  if (!gs.living().length) { addLine('  ...しかし物語は終わらない。','line-story'); return; }
+  await chapter5(gs);
+  await chapter6(gs);
+}
+
+main();
+</script>
+</body>
+</html>
